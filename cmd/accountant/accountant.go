@@ -173,7 +173,7 @@ func main() {
 	stmt, _ = db.Prepare("INSERT INTO operations(id, type, account, sum, description, date, dostupno ) values(?,?,?,?,?,?,?);")
 
 	if *flagServiceMode {
-
+		startService()
 	} else { //not server mode
 		log.Printf("INFO:\tRequest operations after %s date.\n", afterDate)
 		log.Printf("INFO:\tProcessing %v operations...\n", len(r.Messages))
