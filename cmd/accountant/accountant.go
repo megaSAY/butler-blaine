@@ -25,6 +25,8 @@ var flagDaysToProcess = flag.Int("days", defaultDaysToProcess, "Process operatio
 var flagDB = flag.String("base", defaultDB, "Path to data base file.")
 var flagServiceMode = flag.Bool("server", defaultServiceMode, "Run as service.")
 
+var stmt *sql.Stmt
+
 const (
 	iOpCardLastNum int = 1 + iota
 	iOpSum
@@ -47,7 +49,7 @@ const defaultStdoutVerbose = false
 const defaultDB = "./ops.db"
 const defaultServiceMode = false
 
-func insertOperation(stmt *sql.Stmt, tag string, not string) bool {
+func insertOperation(tag string, not string) bool {
 	match, _ := regexp.MatchString(".+"+tag+".+", not)
 	if match {
 
@@ -99,7 +101,7 @@ func insertOperation(stmt *sql.Stmt, tag string, not string) bool {
 	}
 	return match
 }
-func processOperations(stmt *sql.Stmt) bool {
+func processOperations() bool {
 	ctx := context.Background()
 
 	b, err := ioutil.ReadFile(*flagClientSecret)
@@ -153,7 +155,7 @@ func processOperations(stmt *sql.Stmt) bool {
 		}
 		if !ignore {
 			for i := 0; i < len(tagsProc); i++ {
-				if insertOperation(stmt, tagsProc[i], string(ud)) {
+				if insertOperation(tagsProc[i], string(ud)) {
 					break
 				}
 				if i == len(tagsProc)-1 {
@@ -201,13 +203,13 @@ func main() {
 	}
 	defer db.Close()
 
-	stmt, _ := db.Prepare("CREATE TABLE IF NOT EXISTS operations (id INTEGER PRIMARY KEY AUTOINCREMENT, type VARCHAR(64), account VARCHAR(32), sum REAL, description VARCHAR(128), date DATETIME, dostupno REAL, UNIQUE(account, sum, date));")
+	stmt, _ = db.Prepare("CREATE TABLE IF NOT EXISTS operations (id INTEGER PRIMARY KEY AUTOINCREMENT, type VARCHAR(64), account VARCHAR(32), sum REAL, description VARCHAR(128), date DATETIME, dostupno REAL, UNIQUE(account, sum, date));")
 	stmt.Exec()
 	stmt, _ = db.Prepare("INSERT INTO operations(id, type, account, sum, description, date, dostupno ) values(?,?,?,?,?,?,?);")
 
 	if *flagServiceMode {
 		startService()
 	} else { //not server mode
-		processOperations(stmt)
+		processOperations()
 	}
 }
