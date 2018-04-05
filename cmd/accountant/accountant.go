@@ -25,8 +25,6 @@ var flagDaysToProcess = flag.Int("days", defaultDaysToProcess, "Process operatio
 var flagDB = flag.String("base", defaultDB, "Path to data base file.")
 var flagServiceMode = flag.Bool("server", defaultServiceMode, "Run as service.")
 
-var stmt *sql.Stmt
-
 const (
 	iOpCardLastNum int = 1 + iota
 	iOpSum
@@ -49,12 +47,14 @@ const defaultStdoutVerbose = false
 const defaultDB = "./ops.db"
 const defaultServiceMode = false
 
-func insertOperation(tag string, not string) bool {
+func insertOperation(db *sql.DB, tag string, not string) bool {
 	match, _ := regexp.MatchString(".+"+tag+".+", not)
 	if match {
 
 		var compileStrings [2]string
 		var data []string
+
+		stmt, _ := db.Prepare("INSERT INTO operations(id, type, account, sum, description, date, dostupno ) values(?,?,?,?,?,?,?);")
 
 		compileStrings[0] = `^Karta.*\*(\d+).*` + tag + ` (.+) RUR; (.+); (.+),.+dostupno (.+) RUR[. ]`
 		compileStrings[1] = `^Schet.*\*(\d+).*.` + tag + `.(.+) RUB; (\w+).(.+);.+dostupno (.+).RUB\s`
@@ -101,12 +101,16 @@ func insertOperation(tag string, not string) bool {
 	}
 	return match
 }
-func processOperations() bool {
+func processOperations(db *sql.DB) error {
+	stmt, _ := db.Prepare("CREATE TABLE IF NOT EXISTS operations (id INTEGER PRIMARY KEY AUTOINCREMENT, type VARCHAR(64), account VARCHAR(32), sum REAL, description VARCHAR(128), date DATETIME, dostupno REAL, UNIQUE(account, sum, date));")
+	stmt.Exec()
+
 	ctx := context.Background()
 
 	b, err := ioutil.ReadFile(*flagClientSecret)
 	if err != nil {
 		log.Fatalf("ERROR:\tUnable to read client secret file: %v", err)
+		return err
 	}
 
 	// If modifying these scopes, delete your previously saved credentials
@@ -114,11 +118,13 @@ func processOperations() bool {
 	config, err := google.ConfigFromJSON(b, gmail.GmailReadonlyScope)
 	if err != nil {
 		log.Fatalf("ERROR:\tUnable to parse client secret file to config: %v", err)
+		return err
 	}
 	client := getClient(ctx, config)
 	srv, err := gmail.New(client)
 	if err != nil {
 		log.Fatalf("ERROR:\tUnable to retrieve gmail Client %v", err)
+		return err
 	}
 
 	pageToken := ""
@@ -135,6 +141,7 @@ func processOperations() bool {
 	r, err := req.Do()
 	if err != nil {
 		log.Fatalf("ERROR:\tUnable to retrieve messages: %v", err)
+		return err
 	}
 	log.Printf("INFO:\tRequest operations after %s date.\n", afterDate)
 	log.Printf("INFO:\tProcessing %v operations...\n", len(r.Messages))
@@ -155,7 +162,7 @@ func processOperations() bool {
 		}
 		if !ignore {
 			for i := 0; i < len(tagsProc); i++ {
-				if insertOperation(tagsProc[i], string(ud)) {
+				if insertOperation(db, tagsProc[i], string(ud)) {
 					break
 				}
 				if i == len(tagsProc)-1 {
@@ -164,7 +171,7 @@ func processOperations() bool {
 			}
 		}
 	}
-	return true
+	return nil
 }
 func falgsProcessing() {
 	flag.Parse()
@@ -203,13 +210,9 @@ func main() {
 	}
 	defer db.Close()
 
-	stmt, _ = db.Prepare("CREATE TABLE IF NOT EXISTS operations (id INTEGER PRIMARY KEY AUTOINCREMENT, type VARCHAR(64), account VARCHAR(32), sum REAL, description VARCHAR(128), date DATETIME, dostupno REAL, UNIQUE(account, sum, date));")
-	stmt.Exec()
-	stmt, _ = db.Prepare("INSERT INTO operations(id, type, account, sum, description, date, dostupno ) values(?,?,?,?,?,?,?);")
-
 	if *flagServiceMode {
-		startService()
+		startService(db)
 	} else { //not server mode
-		processOperations()
+		processOperations(db)
 	}
 }
