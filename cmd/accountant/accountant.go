@@ -18,6 +18,13 @@ import (
 	"google.golang.org/api/gmail/v1"
 )
 
+// Command line argunments parsing
+var flagStdoutVerbose = flag.Bool("stdout", defaultStdoutVerbose, "Print to stdout.")
+var flagClientSecret = flag.String("secret", defaultClientSecret, "Path to client secret file.")
+var flagDaysToProcess = flag.Int("days", defaultDaysToProcess, "Process operations during last n days.")
+var flagDB = flag.String("base", defaultDB, "Path to data base file.")
+var flagServiceMode = flag.Bool("server", defaultServiceMode, "Run as service.")
+
 const (
 	iOpCardLastNum int = 1 + iota
 	iOpSum
@@ -92,14 +99,72 @@ func insertOperation(stmt *sql.Stmt, tag string, not string) bool {
 	}
 	return match
 }
+func processOperations(stmt *sql.Stmt) bool {
+	ctx := context.Background()
 
-func main() {
-	// Command line argunments parsing
-	var flagStdoutVerbose = flag.Bool("stdout", defaultStdoutVerbose, "Print to stdout.")
-	var flagClientSecret = flag.String("secret", defaultClientSecret, "Path to client secret file.")
-	var flagDaysToProcess = flag.Int("days", defaultDaysToProcess, "Process operations during last n days.")
-	var flagDB = flag.String("base", defaultDB, "Path to data base file.")
-	var flagServiceMode = flag.Bool("server", defaultServiceMode, "Run as service.")
+	b, err := ioutil.ReadFile(*flagClientSecret)
+	if err != nil {
+		log.Fatalf("ERROR:\tUnable to read client secret file: %v", err)
+	}
+
+	// If modifying these scopes, delete your previously saved credentials
+	// at ~/.credentials/gmail.json
+	config, err := google.ConfigFromJSON(b, gmail.GmailReadonlyScope)
+	if err != nil {
+		log.Fatalf("ERROR:\tUnable to parse client secret file to config: %v", err)
+	}
+	client := getClient(ctx, config)
+	srv, err := gmail.New(client)
+	if err != nil {
+		log.Fatalf("ERROR:\tUnable to retrieve gmail Client %v", err)
+	}
+
+	pageToken := ""
+
+	user := "me"
+	now := time.Now()
+	timeAfter := now.AddDate(0, 0, -*flagDaysToProcess)
+	afterDate := fmt.Sprintf("%d/%d/%d", timeAfter.Year(), timeAfter.Month(), timeAfter.Day())
+	req := srv.Users.Messages.List(user).Q("from:(notify@vtb24.ru OR notify@vtb.ru),after:" + afterDate)
+
+	if pageToken != "" {
+		req.PageToken(pageToken)
+	}
+	r, err := req.Do()
+	if err != nil {
+		log.Fatalf("ERROR:\tUnable to retrieve messages: %v", err)
+	}
+	log.Printf("INFO:\tRequest operations after %s date.\n", afterDate)
+	log.Printf("INFO:\tProcessing %v operations...\n", len(r.Messages))
+
+	tagsProc := [...]string{"spisanie", "Oplata", "snyatie", "zachislenie", "postuplenie"}
+	tagsIgnore := [...]string{"voshli", "uvelichen balans scheta na", "umenshen balans scheta na", "Oplata  otklonena"}
+	for _, m := range r.Messages {
+		msg, _ := srv.Users.Messages.Get(user, m.Id).Do()
+		ud, _ := base64.URLEncoding.DecodeString(msg.Payload.Body.Data)
+		ignore := false
+
+		log.Println("PROCESSING:\t" + string(ud))
+		for i := 0; i < len(tagsIgnore); i++ {
+			if match, _ := regexp.MatchString(".+"+tagsIgnore[i]+".+", string(ud)); match {
+				ignore = true
+				log.Println("INFO:\tThis notification type is marked as ignore.")
+			}
+		}
+		if !ignore {
+			for i := 0; i < len(tagsProc); i++ {
+				if insertOperation(stmt, tagsProc[i], string(ud)) {
+					break
+				}
+				if i == len(tagsProc)-1 {
+					log.Println("WARNING:\tNo match for this notificaton.")
+				}
+			}
+		}
+	}
+	return true
+}
+func falgsProcessing() {
 	flag.Parse()
 
 	if *flagStdoutVerbose != defaultStdoutVerbose {
@@ -125,42 +190,10 @@ func main() {
 	if *flagServiceMode != defaultServiceMode {
 		log.Printf("INFO:\tAccountant run as service.")
 	}
+}
 
-	ctx := context.Background()
-
-	b, err := ioutil.ReadFile(*flagClientSecret)
-	if err != nil {
-		log.Fatalf("ERROR:\tUnable to read client secret file: %v", err)
-	}
-
-	// If modifying these scopes, delete your previously saved credentials
-	// at ~/.credentials/gmail.json
-	config, err := google.ConfigFromJSON(b, gmail.GmailReadonlyScope)
-	if err != nil {
-		log.Fatalf("ERROR:\tUnable to parse client secret file to config: %v", err)
-	}
-	client := getClient(ctx, config)
-
-	srv, err := gmail.New(client)
-	if err != nil {
-		log.Fatalf("ERROR:\tUnable to retrieve gmail Client %v", err)
-	}
-
-	pageToken := ""
-
-	user := "me"
-	now := time.Now()
-	timeAfter := now.AddDate(0, 0, -*flagDaysToProcess)
-	afterDate := fmt.Sprintf("%d/%d/%d", timeAfter.Year(), timeAfter.Month(), timeAfter.Day())
-	req := srv.Users.Messages.List(user).Q("from:(notify@vtb24.ru OR notify@vtb.ru),after:" + afterDate)
-
-	if pageToken != "" {
-		req.PageToken(pageToken)
-	}
-	r, err := req.Do()
-	if err != nil {
-		log.Fatalf("ERROR:\tUnable to retrieve messages: %v", err)
-	}
+func main() {
+	falgsProcessing()
 
 	db, err := sql.Open("sqlite3", *flagDB)
 	if err != nil {
@@ -175,33 +208,6 @@ func main() {
 	if *flagServiceMode {
 		startService()
 	} else { //not server mode
-		log.Printf("INFO:\tRequest operations after %s date.\n", afterDate)
-		log.Printf("INFO:\tProcessing %v operations...\n", len(r.Messages))
-
-		tagsProc := [...]string{"spisanie", "Oplata", "snyatie", "zachislenie", "postuplenie"}
-		tagsIgnore := [...]string{"voshli", "uvelichen balans scheta na", "umenshen balans scheta na", "Oplata  otklonena"}
-		for _, m := range r.Messages {
-			msg, _ := srv.Users.Messages.Get(user, m.Id).Do()
-			ud, _ := base64.URLEncoding.DecodeString(msg.Payload.Body.Data)
-			ignore := false
-
-			log.Println("PROCESSING:\t" + string(ud))
-			for i := 0; i < len(tagsIgnore); i++ {
-				if match, _ := regexp.MatchString(".+"+tagsIgnore[i]+".+", string(ud)); match {
-					ignore = true
-					log.Println("INFO:\tThis notification type is marked as ignore.")
-				}
-			}
-			if !ignore {
-				for i := 0; i < len(tagsProc); i++ {
-					if insertOperation(stmt, tagsProc[i], string(ud)) {
-						break
-					}
-					if i == len(tagsProc)-1 {
-						log.Println("WARNING:\tNo match for this notificaton.")
-					}
-				}
-			}
-		}
+		processOperations(stmt)
 	}
 }
