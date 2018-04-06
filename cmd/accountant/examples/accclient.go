@@ -22,15 +22,15 @@ func main() {
 	}
 
 	var reply float32
+	iReply := 0
+	var sReply string
 
-	/*
-		fmt.Println(accountant.UpdateDB)
-		err = client.Call(accountant.UpdateDB, to, &reply)
-		if err != nil {
-			log.Fatal("Account error:", err)
-		}
-		fmt.Println("reply: ", reply)
-	*/
+	fmt.Println(accountant.UpdateDB)
+	err = client.Call(accountant.UpdateDB, 0, &iReply)
+	if err != nil {
+		log.Fatal("Account error:", err)
+	}
+	fmt.Println("reply: ", reply)
 
 	fmt.Println(accountant.GetBalance)
 	err = client.Call(accountant.GetBalance, 8336, &reply)
@@ -39,7 +39,6 @@ func main() {
 	}
 	fmt.Println("reply: ", reply)
 
-	iReply := 0
 	fmt.Println(accountant.GetAccountsQuantity)
 	err = client.Call(accountant.GetAccountsQuantity, 0, &iReply)
 	if err != nil {
@@ -54,5 +53,22 @@ func main() {
 		log.Fatal("Account error:", err)
 	}
 	fmt.Println("reply: ", balances)
+
+	fmt.Println(accountant.GetLastUndefinedOperation)
+	err = client.Call(accountant.GetLastUndefinedOperation, 0, &sReply)
+	if err != nil {
+		log.Fatal("Account error:", err)
+	}
+	fmt.Println("reply: ", sReply)
+
+	fmt.Println(accountant.DefineOperation)
+	df := accountant.DefinedOperation{}
+	df.Group = "SomeGroup3"
+	df.Operation = sReply
+	err = client.Call(accountant.DefineOperation, df, &iReply)
+	if err != nil {
+		log.Fatal("Account error:", err)
+	}
+	fmt.Println("reply: ", sReply)
 
 }

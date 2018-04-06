@@ -113,6 +113,78 @@ func (a *Accountant) GetFullBalance(accountsQuantity int, balances *[]accountant
 
 	return nil
 }
+
+//GetLastUndefinedOperation func(send int, Description *string) error
+func (a *Accountant) GetLastUndefinedOperation(send int, description *string) error {
+	log.Println("INFO:\tGetLastUndefinedOperation called.")
+	query := "SELECT operations.description FROM operations WHERE description NOT IN (SELECT description FROM defined_operations) LIMIT 1;"
+
+	if a.db == nil {
+		log.Fatalf("ERROR:\tDB pointer is nil.")
+	}
+	rows, err := a.db.Query(query)
+	if err != nil {
+		log.Fatalf("ERROR:\tUnable to query DB: %v", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+
+		err = rows.Scan(description)
+		if err != nil {
+			log.Fatalf("ERROR:\tUnable to scan rows DB: %v", err)
+		}
+	}
+	log.Println("INFO:\tLast undefined operation description: ", *description)
+	return nil
+}
+
+//DefineOperation func(do *accountant.DefinedOperation, reply *int) error
+func (a *Accountant) DefineOperation(do *accountant.DefinedOperation, reply *int) error {
+
+	log.Println("INFO:\tDefineOperation called.")
+	if a.db == nil {
+		log.Fatalf("ERROR:\tDB pointer is nil.")
+	}
+	var gid int64
+	gid = -1
+	rows, err := a.db.Query("SELECT id FROM groups WHERE name = '" + do.Group + "'")
+	if err != nil {
+		log.Fatalf("ERROR:\tUnable to query DB: %v", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		err = rows.Scan(&gid)
+		if err != nil {
+			log.Fatalf("ERROR:\tUnable to scan rows DB: %v", err)
+		}
+	}
+
+	if gid != -1 {
+		log.Println("INFO:\tgid ", gid)
+	} else {
+		log.Println("INFO:\tGroup not found. Creating new group.")
+		stmt, _ := a.db.Prepare("INSERT INTO groups(id, name, description) values(?,?,?);")
+		result, err := stmt.Exec(nil, do.Group, "reserved")
+		if err != nil {
+			log.Fatalf("ERROR:\tInsert new group %v", err)
+		} else {
+			gid, _ = result.LastInsertId()
+		}
+		log.Println("INFO:\tNew group created successfuly.")
+	}
+
+	stmt, _ := a.db.Prepare("INSERT INTO defined_operations(id, gid, description) values(?,?,?);")
+	_, err = stmt.Exec(nil, gid, do.Operation)
+	if err != nil {
+		log.Fatalf("ERROR:\t%v", err)
+	}
+	log.Println("INFO:\tOperation defined successfuly.")
+
+	return nil
+}
+
 func startService(db *sql.DB) {
 
 	accountant := new(Accountant)

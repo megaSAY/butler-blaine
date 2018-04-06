@@ -104,6 +104,10 @@ func insertOperation(db *sql.DB, tag string, not string) bool {
 func processOperations(db *sql.DB) error {
 	stmt, _ := db.Prepare("CREATE TABLE IF NOT EXISTS operations (id INTEGER PRIMARY KEY AUTOINCREMENT, type VARCHAR(64), account VARCHAR(32), sum REAL, description VARCHAR(128), date DATETIME, dostupno REAL, UNIQUE(account, sum, date));")
 	stmt.Exec()
+	stmt, _ = db.Prepare("CREATE TABLE IF NOT EXISTS groups (id INTEGER PRIMARY KEY AUTOINCREMENT, name VARCHAR(64), description VARCHAR(64), UNIQUE(name));")
+	stmt.Exec()
+	stmt, _ = db.Prepare("CREATE TABLE IF NOT EXISTS defined_operations (id INTEGER PRIMARY KEY AUTOINCREMENT, gid INTEGER, description VARCHAR(64), UNIQUE(gid,description));")
+	stmt.Exec()
 
 	ctx := context.Background()
 

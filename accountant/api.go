@@ -17,3 +17,15 @@ type Balance struct {
 	Account  int
 	Dostupno string
 }
+
+//GetLastUndefinedOperation Send 0. Reply *string
+const GetLastUndefinedOperation = "Accountant.GetLastUndefinedOperation"
+
+//DefineOperation Send DefinedOperation. Reply :0
+const DefineOperation = "Accountant.DefineOperation"
+
+//DefinedOperation Send.
+type DefinedOperation struct {
+	Group     string
+	Operation string
+}
