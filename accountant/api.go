@@ -24,6 +24,9 @@ const GetLastUndefinedOperation = "Accountant.GetLastUndefinedOperation"
 //DefineOperation Send DefinedOperation. Reply :0
 const DefineOperation = "Accountant.DefineOperation"
 
+//CancelOperationDefinition Send DefinedOperation. Reply :0
+const CancelOperationDefinition = "Accountant.CancelOperationDefinition"
+
 //DefinedOperation Send.
 type DefinedOperation struct {
 	Group     string

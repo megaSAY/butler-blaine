@@ -71,4 +71,28 @@ func main() {
 	}
 	fmt.Println("reply: ", sReply)
 
+	fmt.Println(accountant.GetLastUndefinedOperation)
+	err = client.Call(accountant.GetLastUndefinedOperation, 0, &sReply)
+	if err != nil {
+		log.Fatal("Account error:", err)
+	}
+	fmt.Println("reply: ", sReply)
+
+	fmt.Println(accountant.CancelOperationDefinition)
+	/*df := accountant.DefinedOperation{}
+	df.Group = "SomeGroup3"
+	df.Operation = sReply*/
+	err = client.Call(accountant.CancelOperationDefinition, df, &iReply)
+	if err != nil {
+		log.Fatal("Account error:", err)
+	}
+	fmt.Println("reply: ", sReply)
+
+	fmt.Println(accountant.GetLastUndefinedOperation)
+	err = client.Call(accountant.GetLastUndefinedOperation, 0, &sReply)
+	if err != nil {
+		log.Fatal("Account error:", err)
+	}
+	fmt.Println("reply: ", sReply)
+
 }

@@ -17,7 +17,7 @@ type Accountant struct {
 
 //UpdateDB func(send int, reply *int) error
 func (a *Accountant) UpdateDB(send int, reply *int) error {
-	log.Println("INFO:\tUpdateDB called.")
+	log.Println("INFO:\t*UpdateDB called.")
 	err := processOperations(a.db)
 	return err
 }
@@ -29,7 +29,7 @@ func (a *Accountant) GetBalance(account int, balance *float64) error {
 		Date     string
 	}
 	var item Item
-	log.Println("INFO:\tGetBalance called.")
+	log.Println("INFO:\t*GetBalance called.")
 	log.Println("INFO:\tRequest for account: ", account)
 	query := "SELECT dostupno, MAX(date) FROM operations WHERE account = '" + strconv.Itoa(account) + "' group by account;"
 
@@ -57,7 +57,7 @@ func (a *Accountant) GetBalance(account int, balance *float64) error {
 
 //GetAccountsQuantity func(send int, quantity *int) error
 func (a *Accountant) GetAccountsQuantity(send int, quantity *int) error {
-	log.Println("INFO:\tGetAccountsQuantity called.")
+	log.Println("INFO:\t*GetAccountsQuantity called.")
 	query := "SELECT COUNT(*) AS count FROM (SELECT account FROM operations group by account);"
 
 	if a.db == nil {
@@ -88,7 +88,7 @@ func (a *Accountant) GetFullBalance(accountsQuantity int, balances *[]accountant
 		Date     string
 	}
 	var item Item
-	log.Println("INFO:\tGetFullBalance called.")
+	log.Println("INFO:\t*GetFullBalance called.")
 	query := "SELECT account, dostupno, MAX(date) FROM operations group by account;"
 
 	if a.db == nil {
@@ -116,7 +116,7 @@ func (a *Accountant) GetFullBalance(accountsQuantity int, balances *[]accountant
 
 //GetLastUndefinedOperation func(send int, Description *string) error
 func (a *Accountant) GetLastUndefinedOperation(send int, description *string) error {
-	log.Println("INFO:\tGetLastUndefinedOperation called.")
+	log.Println("INFO:\t*GetLastUndefinedOperation called.")
 	query := "SELECT operations.description FROM operations WHERE description NOT IN (SELECT description FROM defined_operations) LIMIT 1;"
 
 	if a.db == nil {
@@ -142,13 +142,13 @@ func (a *Accountant) GetLastUndefinedOperation(send int, description *string) er
 //DefineOperation func(do *accountant.DefinedOperation, reply *int) error
 func (a *Accountant) DefineOperation(do *accountant.DefinedOperation, reply *int) error {
 
-	log.Println("INFO:\tDefineOperation called.")
+	log.Println("INFO:\t*DefineOperation called.")
 	if a.db == nil {
 		log.Fatalf("ERROR:\tDB pointer is nil.")
 	}
 	var gid int64
 	gid = -1
-	rows, err := a.db.Query("SELECT id FROM groups WHERE name = '" + do.Group + "'")
+	rows, err := a.db.Query("SELECT id FROM groups WHERE name = $1", do.Group)
 	if err != nil {
 		log.Fatalf("ERROR:\tUnable to query DB: %v", err)
 	}
@@ -181,6 +181,33 @@ func (a *Accountant) DefineOperation(do *accountant.DefinedOperation, reply *int
 		log.Fatalf("ERROR:\t%v", err)
 	}
 	log.Println("INFO:\tOperation defined successfuly.")
+
+	return nil
+}
+
+//CancelOperationDefinition func(do *accountant.DefinedOperation, reply *int) error
+func (a *Accountant) CancelOperationDefinition(do *accountant.DefinedOperation, reply *int) error {
+
+	log.Println("INFO:\t*CancelOperationDefinition called.")
+	if a.db == nil {
+		log.Fatalf("ERROR:\tDB pointer is nil.")
+	}
+	var gid int64
+	row := a.db.QueryRow("SELECT id FROM groups WHERE name = $1", do.Group)
+	err := row.Scan(&gid)
+	if err == sql.ErrNoRows {
+		log.Printf("INFO:\tGroup '%s' not found.\n", do.Group)
+	} else if err != nil {
+		log.Fatalf("ERROR:\tUnable to scan id: %v", err)
+	}
+
+	log.Printf("INFO:\tCancel defenition. Gid %d. Operation %s.\n", gid, do.Operation)
+	_, err = a.db.Exec("DELETE FROM defined_operations WHERE description = $1 AND gid = $2", do.Operation, gid)
+	if err != nil {
+		log.Fatalf("ERROR:\tUnable cancel definition: %v", err)
+	}
+
+	log.Println("INFO:\tOperation definition cancel successfuly.")
 
 	return nil
 }
