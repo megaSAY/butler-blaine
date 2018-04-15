@@ -184,7 +184,7 @@ func falgsProcessing() {
 		log.Printf("INFO:\tDefault print output changed to stdout.")
 	}
 	if !*flagStdoutVerbose {
-		f, err := os.OpenFile("/var/log/butlerblaine/oppars.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+		f, err := os.OpenFile("/var/log/butler-blaine/accountant.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 		if err != nil {
 			log.Fatalf("ERROR:\tUnable to create log file: %v", err)
 		}
@@ -207,6 +207,8 @@ func falgsProcessing() {
 
 func main() {
 	falgsProcessing()
+
+	fmt.Println(*flagClientSecret)
 
 	db, err := sql.Open("sqlite3", *flagDB)
 	if err != nil {

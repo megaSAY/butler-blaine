@@ -7,7 +7,7 @@ import (
 	"net/rpc"
 	"strconv"
 
-	"github.com/megasay/butlerblaine/accountant"
+	"github.com/megasay/butler-blaine/accountant"
 )
 
 //Accountant int
@@ -208,6 +208,63 @@ func (a *Accountant) CancelOperationDefinition(do *accountant.DefinedOperation, 
 	}
 
 	log.Println("INFO:\tOperation definition cancel successfuly.")
+
+	return nil
+}
+
+//GetOperationsGroupsNames func(0, groupsNames *[]string) error
+func (a *Accountant) GetOperationsGroupsNames(send int, groupsNames *[]string) error {
+	log.Println("INFO:\t*GetOperationsGroupsNames.")
+	query := "SELECT name FROM groups;"
+
+	if a.db == nil {
+		log.Fatalf("ERROR:\tDB pointer is nil.")
+	}
+	rows, err := a.db.Query(query)
+	if err != nil {
+		log.Fatalf("ERROR:\tUnable to query DB: %v", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var name string
+		err = rows.Scan(&name)
+		if err != nil {
+			log.Fatalf("ERROR:\tUnable to scan rows DB: %v", err)
+		}
+		*groupsNames = append(*groupsNames, name)
+	}
+	log.Println("INFO:\tGroups names: ", *groupsNames)
+	return nil
+}
+
+//DeleteOperationsGroup func(name string, reply 0) error
+func (a *Accountant) DeleteOperationsGroups(name string, reply int) error {
+	log.Println("INFO:\t*DeleteOperationsGroup.")
+
+	if a.db == nil {
+		log.Fatalf("ERROR:\tDB pointer is nil.")
+	}
+
+	var gid int64
+	row := a.db.QueryRow("SELECT id FROM groups WHERE name = $1", name)
+	err := row.Scan(&gid)
+	if err == sql.ErrNoRows {
+		log.Printf("INFO:\tGroup '%s' not found.\n", name)
+	} else if err != nil {
+		log.Fatalf("ERROR:\tUnable to scan id: %v", err)
+	}
+
+	log.Printf("INFO:\tDelete group. Gid %d. name %s.\n", gid, name)
+	_, err = a.db.Exec("DELETE FROM groups WHERE name = $1", name)
+	if err != nil {
+		log.Fatalf("ERROR:\tUnable delete group: %v", err)
+	}
+
+	_, err = a.db.Exec("DELETE FROM defined_operations WHERE gid = $1", gid)
+	if err != nil {
+		log.Fatalf("ERROR:\tUnable definitions for this group: %v", err)
+	}
 
 	return nil
 }

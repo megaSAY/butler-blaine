@@ -32,3 +32,9 @@ type DefinedOperation struct {
 	Group     string
 	Operation string
 }
+
+//GetOperationsGroupsNames Send 0. Reply :0
+const GetOperationsGroupsNames = "Accountant.GetOperationsGroupsNames"
+
+//DeleteOperationsGroups Send group name. Reply :0
+const DeleteOperationsGroup = "Accountant.DeleteOperationsGroup"
